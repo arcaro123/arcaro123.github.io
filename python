@@ -1,0 +1,55 @@
+import os
+import time
+import csv
+import json
+import subprocess
+from datetime import datetime
+
+# Configuració
+INTERVAL = 30  # Periodicitat en segons
+SENSOR_PATH = "/sys/bus/w1/devices/28-xxxx/w1_slave"  # Canvia '28-xxxx' pel teu id
+REPO_PATH = "/home/pi/el_teu_repositori"  # Ruta local del teu GitHub Pages
+CSV_FILE = os.path.join(REPO_PATH, "dades_temperatura.csv")
+JSON_FILE = os.path.join(REPO_PATH, "data.json")
+
+def llegir_temp():
+    try:
+        with open(SENSOR_PATH, "r") as f:
+            linies = f.readlines()
+        if "YES" not in linies[0]: return None
+        temp_data = linies[1].split("t=")[1]
+        return float(temp_data) / 1000.0
+    except:
+        return None
+
+def push_to_github():
+    try:
+        os.chdir(REPO_PATH)
+        subprocess.run(["git", "add", "data.json", "dades_temperatura.csv"], check=True)
+        subprocess.run(["git", "commit", "-m", f"Auto-update: {datetime.now()}"], check=True)
+        subprocess.run(["git", "push"], check=True)
+    except Exception as e:
+        print(f"Error GitHub: {e}")
+
+# Bucle principal
+while True:
+    temp = llegir_temp()
+    if temp is not None:
+        ara = datetime.now()
+        data_str = ara.strftime("%Y-%m-%d")
+        hora_str = ara.strftime("%H:%M:%S")
+       
+        # 1. Desar en CSV
+        with open(CSV_FILE, "a", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([data_str, hora_str, temp])
+       
+        # 2. Desar JSON per a GitHub Pages
+        dades_json = {"ultima_actualitzacio": f"{data_str} {hora_str}", "temperatura": temp}
+        with open(JSON_FILE, "w") as f:
+            json.dump(dades_json, f, indent=4)
+       
+        # 3. Pujar a GitHub
+        push_to_github()
+       
+    time.sleep(INTERVAL)
