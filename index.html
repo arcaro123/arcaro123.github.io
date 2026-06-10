@@ -10,8 +10,8 @@ body {
     margin: 20px;
 }
 
-h1 {
-    margin-bottom: 10px;
+h1, h2 {
+    margin-top: 20px;
 }
 
 .filtros {
@@ -25,7 +25,8 @@ h1 {
 table {
     border-collapse: collapse;
     width: 100%;
-    max-width: 700px;
+    max-width: 900px;
+    margin-bottom: 20px;
 }
 
 th, td {
@@ -73,6 +74,8 @@ Datos enviados automáticamente desde la Raspberry Pi y guardados en
 
 <button onclick="cargarDatos()">Actualizar datos</button>
 
+<h2>Lecturas registradas</h2>
+
 <table id="tabla">
     <thead>
         <tr>
@@ -80,16 +83,53 @@ Datos enviados automáticamente desde la Raspberry Pi y guardados en
             <th>Temperatura (°C)</th>
         </tr>
     </thead>
+    <tbody></tbody>
+</table>
 
-    <tbody>
-    </tbody>
+<h2>Estadísticas diarias</h2>
+
+<table id="tablaDiaria">
+    <thead>
+        <tr>
+            <th>Fecha</th>
+            <th>Mínima</th>
+            <th>Media</th>
+            <th>Máxima</th>
+        </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<h2>Estadísticas mensuales</h2>
+
+<table id="tablaMensual">
+    <thead>
+        <tr>
+            <th>Mes</th>
+            <th>Mínima</th>
+            <th>Media</th>
+            <th>Máxima</th>
+        </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<h2>Estadísticas por franjas horarias</h2>
+
+<table id="tablaFranjas">
+    <thead>
+        <tr>
+            <th>Franja</th>
+            <th>Temperatura media</th>
+        </tr>
+    </thead>
+    <tbody></tbody>
 </table>
 
 <div id="error"></div>
 
 <script>
 
-// URL del JSON
 const URL_JSON = "data/lectures.json";
 
 async function cargarDatos() {
@@ -135,17 +175,14 @@ async function cargarDatos() {
             const temp =
                 parseFloat(registro.temperature_c);
 
-            if (filtroFecha && fechaRegistro !== filtroFecha) {
+            if (filtroFecha && fechaRegistro !== filtroFecha)
                 return false;
-            }
 
-            if (filtroMin && temp < parseFloat(filtroMin)) {
+            if (filtroMin && temp < parseFloat(filtroMin))
                 return false;
-            }
 
-            if (filtroMax && temp > parseFloat(filtroMax)) {
+            if (filtroMax && temp > parseFloat(filtroMax))
                 return false;
-            }
 
             return true;
         });
@@ -156,12 +193,14 @@ async function cargarDatos() {
             return;
         }
 
+        // TABLA PRINCIPAL
+
         datosFiltrados.forEach(registro => {
 
             const tr = document.createElement("tr");
 
             const tdFecha = document.createElement("td");
-            tdFecha.textContent = registro.timestamp || "";
+            tdFecha.textContent = registro.timestamp;
 
             const tdTemp = document.createElement("td");
             tdTemp.textContent =
@@ -172,6 +211,140 @@ async function cargarDatos() {
 
             tbody.appendChild(tr);
         });
+
+        // ESTADÍSTICAS DIARIAS
+
+        const diaria = {};
+
+        datosFiltrados.forEach(r => {
+
+            const temp = parseFloat(r.temperature_c);
+
+            if (temp > 80 || temp < -20) return;
+
+            const dia = r.timestamp.substring(0, 10);
+
+            if (!diaria[dia]) diaria[dia] = [];
+
+            diaria[dia].push(temp);
+        });
+
+        const tbodyDiaria =
+            document.querySelector("#tablaDiaria tbody");
+
+        tbodyDiaria.innerHTML = "";
+
+        for (const dia in diaria) {
+
+            const valores = diaria[dia];
+
+            const min = Math.min(...valores);
+            const max = Math.max(...valores);
+            const media =
+                valores.reduce((a,b)=>a+b,0) /
+                valores.length;
+
+            tbodyDiaria.innerHTML += `
+                <tr>
+                    <td>${dia}</td>
+                    <td>${min.toFixed(2)} °C</td>
+                    <td>${media.toFixed(2)} °C</td>
+                    <td>${max.toFixed(2)} °C</td>
+                </tr>
+            `;
+        }
+
+        // ESTADÍSTICAS MENSUALES
+
+        const mensual = {};
+
+        datosFiltrados.forEach(r => {
+
+            const temp = parseFloat(r.temperature_c);
+
+            if (temp > 80 || temp < -20) return;
+
+            const mes = r.timestamp.substring(0, 7);
+
+            if (!mensual[mes]) mensual[mes] = [];
+
+            mensual[mes].push(temp);
+        });
+
+        const tbodyMensual =
+            document.querySelector("#tablaMensual tbody");
+
+        tbodyMensual.innerHTML = "";
+
+        for (const mes in mensual) {
+
+            const valores = mensual[mes];
+
+            const min = Math.min(...valores);
+            const max = Math.max(...valores);
+            const media =
+                valores.reduce((a,b)=>a+b,0) /
+                valores.length;
+
+            tbodyMensual.innerHTML += `
+                <tr>
+                    <td>${mes}</td>
+                    <td>${min.toFixed(2)} °C</td>
+                    <td>${media.toFixed(2)} °C</td>
+                    <td>${max.toFixed(2)} °C</td>
+                </tr>
+            `;
+        }
+
+        // FRANJAS HORARIAS
+
+        const franjas = {
+            "00:00 - 05:59": [],
+            "06:00 - 11:59": [],
+            "12:00 - 17:59": [],
+            "18:00 - 23:59": []
+        };
+
+        datosFiltrados.forEach(r => {
+
+            const temp = parseFloat(r.temperature_c);
+
+            if (temp > 80 || temp < -20) return;
+
+            const hora =
+                parseInt(r.timestamp.substring(11, 13));
+
+            if (hora < 6)
+                franjas["00:00 - 05:59"].push(temp);
+            else if (hora < 12)
+                franjas["06:00 - 11:59"].push(temp);
+            else if (hora < 18)
+                franjas["12:00 - 17:59"].push(temp);
+            else
+                franjas["18:00 - 23:59"].push(temp);
+        });
+
+        const tbodyFranjas =
+            document.querySelector("#tablaFranjas tbody");
+
+        tbodyFranjas.innerHTML = "";
+
+        for (const franja in franjas) {
+
+            const datosFranja = franjas[franja];
+
+            const media = datosFranja.length
+                ? datosFranja.reduce((a,b)=>a+b,0)
+                    / datosFranja.length
+                : 0;
+
+            tbodyFranjas.innerHTML += `
+                <tr>
+                    <td>${franja}</td>
+                    <td>${media.toFixed(2)} °C</td>
+                </tr>
+            `;
+        }
 
     } catch (e) {
 
@@ -191,7 +364,6 @@ function limpiarFiltros() {
     cargarDatos();
 }
 
-// Cargar automáticamente al abrir la página
 cargarDatos();
 
 </script>
